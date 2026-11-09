@@ -1,0 +1,3 @@
+ADD_LIBRARY(ssr-stack STATIC cFramePointerWalker.cpp)
+TARGET_INCLUDE_DIRECTORIES(ssr-stack PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+TARGET_LINK_LIBRARIES(ssr-stack PRIVATE ssr-warnings)

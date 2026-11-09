@@ -1,0 +1,3 @@
+ADD_LIBRARY(ssr-wait STATIC cWaitClassifier.cpp)
+TARGET_INCLUDE_DIRECTORIES(ssr-wait PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+TARGET_LINK_LIBRARIES(ssr-wait PUBLIC ssr-process PRIVATE ssr-warnings)

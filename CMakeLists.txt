@@ -18,7 +18,11 @@ INCLUDE_DIRECTORIES("${PROJECT_SOURCE_DIR}/src")
 ADD_LIBRARY(ssr-warnings INTERFACE)
 TARGET_COMPILE_OPTIONS(ssr-warnings INTERFACE -Wall -Wextra -Wpedantic -Werror -Wmissing-declarations -pedantic-errors)
 
-SET(STACK_SAMPLER_MODULES src)
+# Modules in dependency order, the executable last; sampling is Linux-only.
+SET(STACK_SAMPLER_MODULES stack profile src)
+IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    SET(STACK_SAMPLER_MODULES process wait stack profile src)
+ENDIF()
 FOREACH(MODULE IN LISTS STACK_SAMPLER_MODULES)
     ADD_SUBDIRECTORY(${MODULE})
 ENDFOREACH()

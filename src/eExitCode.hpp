@@ -18,11 +18,18 @@
 namespace stack_sampler {
 
 enum class ExitCode {
-  // --help or --version.
+  // The profile is written, or --help or --version.
   Success = 0,
 
   // The command line is invalid.
   UsageError = 1,
+
+  // The target process cannot be sampled: it does not exist, its /proc files
+  // cannot be read (run as root), or the platform is not supported.
+  TargetError = 2,
+
+  // The profile cannot be written to the output file.
+  OutputError = 3,
 };
 
 }  // namespace stack_sampler

@@ -10,7 +10,7 @@ OPTION(BUILD_DEB "Build a Debian/Ubuntu package" ${BUILD_DEB_DEFAULT})
 SET(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
 SET(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 SET(CPACK_PACKAGE_DESCRIPTION_SUMMARY
-    "Wait profile of a running Linux process taken without stopping it")
+    "Wait and CPU profiles of a running Linux process taken without stopping it")
 SET(CPACK_PACKAGE_CONTACT "abychko@gmail.com")
 SET(CPACK_PACKAGE_VENDOR "ABYCHKO.EXPERT")
 SET(CPACK_PACKAGING_INSTALL_PREFIX "/usr")

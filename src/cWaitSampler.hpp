@@ -15,10 +15,8 @@
 
 #pragma once
 
-#include <atomic>
 #include <cstdint>
 
-#include "cBuildIdReader.hpp"
 #include "cFileDescriptorReader.hpp"
 #include "cFramePointerWalker.hpp"
 #include "cMemoryMap.hpp"
@@ -27,36 +25,32 @@
 #include "cRemoteMemory.hpp"
 #include "cThreadReader.hpp"
 #include "cWaitClassifier.hpp"
-#include "sOptions.hpp"
 #include "sSamplerStatistics.hpp"
 #include "sStackCopy.hpp"
 
 namespace stack_sampler {
 
-// Takes the wait profile of the target: at the given frequency it passes over
-// all threads, and for every blocked one reads its system call and its stack
-// without stopping it. Running threads are counted with their state only.
-class Sampler {
+// The wait profile: one pass over all threads of the target reads, for every
+// blocked one, its system call and its stack without stopping it. Running
+// threads are counted with their state only; their stacks come from the CPU
+// profile.
+class WaitSampler {
  public:
-  Sampler(const Options &options, ProfileBuilder &profile);
+  // The memory map is loaded by the caller before every pass.
+  WaitSampler(int pid, const MemoryMap &map, ProfileBuilder &profile, std::int64_t wallPerSample);
 
-  SamplerStatistics run(const std::atomic<bool> &stopRequested);
+  void pass(SamplerStatistics &statistics);
 
   // Nanoseconds of wall time one sample stands for.
   static std::int64_t wallPerSample(double frequency);
 
  private:
-  // False when the target is gone.
-  bool pass(SamplerStatistics &statistics);
   void sampleThread(int tid, SamplerStatistics &statistics);
-  void addMappings();
 
-  const Options &options_;
+  const MemoryMap &map_;
   ProfileBuilder &profile_;
   ThreadReader threads_;
-  MemoryMap map_;
   RemoteMemory memory_;
-  BuildIdReader buildIds_;
   FileDescriptorReader descriptors_;
   WaitClassifier classifier_;
   ProcessCodeSource code_;

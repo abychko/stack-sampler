@@ -26,7 +26,7 @@ namespace {
 // Field numbers of profile.proto (github.com/google/pprof, proto/profile.proto).
 namespace profile {
 constexpr int kSampleType = 1, kSample = 2, kMapping = 3, kLocation = 4, kStringTable = 6, kTimeNanos = 9,
-              kDurationNanos = 10, kPeriodType = 11, kPeriod = 12, kComment = 13;
+              kDurationNanos = 10, kPeriodType = 11, kPeriod = 12, kComment = 13, kDefaultSampleType = 14;
 }
 namespace value_type {
 constexpr int kType = 1, kUnit = 2;
@@ -139,6 +139,7 @@ std::string ProfileBuilder::serialize() {
   }
   out.signedVarint(profile::kPeriod, period_);
   for (const std::string &comment : comments_) out.signedVarint(profile::kComment, text(comment));
+  if (!defaultSampleType_.empty()) out.signedVarint(profile::kDefaultSampleType, text(defaultSampleType_));
   // The string table goes last: every index above is already in it.
   for (const std::string &value : strings_) out.bytes(profile::kStringTable, value);
   return out.data();

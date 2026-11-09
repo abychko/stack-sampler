@@ -42,6 +42,7 @@ class ProfileBuilder {
                  std::span<const std::int64_t> values);
   void setTime(std::int64_t startNanoseconds, std::int64_t durationNanoseconds);
   void addComment(std::string comment);
+  void setDefaultSampleType(std::string type) { defaultSampleType_ = std::move(type); }
 
   std::size_t sampleCount() const { return samples_.size(); }
   std::string serialize();
@@ -64,6 +65,7 @@ class ProfileBuilder {
   std::int64_t startNanoseconds_ = 0;
   std::int64_t durationNanoseconds_ = 0;
   std::vector<std::string> comments_;
+  std::string defaultSampleType_;
 
   std::vector<ProfileMapping> mappings_;
   std::vector<std::uint64_t> locationAddresses_;  // location id - 1 -> address

@@ -2,6 +2,16 @@
 
 Changes by minor version; each entry includes its patch releases.
 
+## 0.4 — 2026-11-09
+
+### Added
+
+- CPU profile: `--profile cpu`, or `--profile wait,cpu` for both in one file; `--cpu-frequency` sets the sampling rate, 99 Hz by default. Threads are not stopped: the kernel samples every CPU and walks user stacks along frame pointers.
+
+### Changed
+
+- Every profile has the sample types samples, wall and cpu and a `profile` label (wait or cpu).
+
 ## 0.3 — 2026-11-09
 
 ### Added

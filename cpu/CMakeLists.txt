@@ -1,0 +1,3 @@
+ADD_LIBRARY(ssr-cpu STATIC cPerfRing.cpp cPerfEvents.cpp)
+TARGET_INCLUDE_DIRECTORIES(ssr-cpu PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+TARGET_LINK_LIBRARIES(ssr-cpu PRIVATE ssr-warnings)

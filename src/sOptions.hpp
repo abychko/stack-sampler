@@ -25,7 +25,10 @@ struct Options {
   bool version = false;
 
   int pid = 0;
-  double frequency = 1.0;  // passes over all threads per second
+  bool waitProfile = true;
+  bool cpuProfile = false;
+  double frequency = 1.0;      // wait passes over all threads per second
+  double cpuFrequency = 99.0;  // CPU samples per second on every CPU
   double duration = 10.0;  // seconds
   std::string output;      // pprof file, gzip-compressed
 };

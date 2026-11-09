@@ -15,6 +15,7 @@
 
 #include "cCommandLine.hpp"
 
+#include <algorithm>
 #include <cstdlib>
 #include <string_view>
 
@@ -25,11 +26,30 @@ namespace {
 constexpr double kMinimumFrequency = 0.01;
 constexpr double kMaximumFrequency = 100.0;
 constexpr double kMaximumDuration = 7 * 24 * 3600.0;
+constexpr double kMaximumCpuFrequency = 1000.0;
 
 bool parseNumber(const std::string &text, double &value) {
   char *end = nullptr;
   value = std::strtod(text.c_str(), &end);
   return !text.empty() && end != nullptr && *end == '\0';
+}
+
+// "wait", "cpu" or both, comma-separated.
+bool parseProfiles(const std::string &text, Options &options) {
+  options.waitProfile = options.cpuProfile = false;
+  std::size_t start = 0;
+  while (start <= text.size()) {
+    const std::size_t comma = std::min(text.find(',', start), text.size());
+    const std::string_view kind(text.data() + start, comma - start);
+    if (kind == "wait")
+      options.waitProfile = true;
+    else if (kind == "cpu")
+      options.cpuProfile = true;
+    else
+      return false;
+    start = comma + 1;
+  }
+  return options.waitProfile || options.cpuProfile;
 }
 
 }  // namespace
@@ -49,7 +69,8 @@ std::optional<Options> CommandLine::parse(int argc, char **argv, std::string &er
       (name == "--help" ? options.help : options.version) = true;
       continue;
     }
-    if (name != "--pid" && name != "--frequency" && name != "--duration" && name != "--output") {
+    if (name != "--pid" && name != "--frequency" && name != "--duration" && name != "--output" &&
+        name != "--profile" && name != "--cpu-frequency") {
       error = "unknown option " + name;
       return std::nullopt;
     }
@@ -63,6 +84,11 @@ std::optional<Options> CommandLine::parse(int argc, char **argv, std::string &er
     double number = 0;
     if (name == "--output") {
       options.output = value;
+    } else if (name == "--profile") {
+      if (!parseProfiles(value, options)) {
+        error = "--profile: expected wait, cpu or wait,cpu: " + value;
+        return std::nullopt;
+      }
     } else if (!parseNumber(value, number)) {
       error = name + ": not a number: " + value;
       return std::nullopt;
@@ -78,6 +104,12 @@ std::optional<Options> CommandLine::parse(int argc, char **argv, std::string &er
         return std::nullopt;
       }
       options.frequency = number;
+    } else if (name == "--cpu-frequency") {
+      if (number < 1 || number > kMaximumCpuFrequency) {
+        error = "--cpu-frequency: out of range 1..1000: " + value;
+        return std::nullopt;
+      }
+      options.cpuFrequency = number;
     } else {
       if (number <= 0 || number > kMaximumDuration) {
         error = "--duration: out of range (0, 604800]: " + value;

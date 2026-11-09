@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -32,6 +33,12 @@ struct SamplerStatistics {
   std::uint64_t leafCallers = 0;
   std::uint64_t gone = 0;  // the thread exited or could not be read
   std::vector<double> passMilliseconds;
+
+  std::uint64_t cpuSamples = 0;
+  std::uint64_t cpuOtherProcesses = 0;  // samples of other processes, dropped
+  std::uint64_t cpuNoStack = 0;
+  std::uint64_t cpuLost = 0;  // samples the kernel dropped: a ring was full
+  std::size_t cpus = 0;
 };
 
 }  // namespace stack_sampler

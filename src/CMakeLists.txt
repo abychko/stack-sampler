@@ -1,8 +1,8 @@
 SET(SOURCES main.cpp cCommandLine.cpp)
 SET(MODULE_LIBRARIES)
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    LIST(APPEND SOURCES cSampler.cpp cProcessCodeSource.cpp)
-    SET(MODULE_LIBRARIES ssr-process ssr-wait ssr-stack ssr-profile)
+    LIST(APPEND SOURCES cRecorder.cpp cWaitSampler.cpp cCpuSampler.cpp cProcessCodeSource.cpp)
+    SET(MODULE_LIBRARIES ssr-process ssr-wait ssr-stack ssr-cpu ssr-profile)
 ENDIF()
 
 ADD_EXECUTABLE(${PROJECT_NAME} ${SOURCES})

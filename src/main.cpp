@@ -79,7 +79,8 @@ int sample(const stack_sampler::Options &options) {
 
   profile.setTime(std::chrono::duration_cast<std::chrono::nanoseconds>(started.time_since_epoch()).count(),
                   std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count());
-  profile.addComment(std::string(STACK_SAMPLER_NAME) + " " + STACK_SAMPLER_VERSION);
+  profile.addComment(std::string(STACK_SAMPLER_NAME) + " " + STACK_SAMPLER_VERSION + " (commit " +
+                     STACK_SAMPLER_COMMIT + ")");
   profile.addComment("pid " + std::to_string(options.pid) + ", " + std::to_string(options.frequency) + " Hz");
   const std::size_t profileSamples = profile.sampleCount();
   const std::string error = GzipFile::write(options.output, profile.serialize());
@@ -120,7 +121,7 @@ int main(int argc, char **argv) {
     return exitWith(ExitCode::Success);
   }
   if (options->version) {
-    std::printf("%s %s\n", STACK_SAMPLER_NAME, STACK_SAMPLER_VERSION);
+    std::printf("%s %s (commit %s)\n", STACK_SAMPLER_NAME, STACK_SAMPLER_VERSION, STACK_SAMPLER_COMMIT);
     return exitWith(ExitCode::Success);
   }
 #ifdef __linux__

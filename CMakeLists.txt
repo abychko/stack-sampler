@@ -29,3 +29,8 @@ ENDFOREACH()
 
 INCLUDE(cmake/format.cmake)
 ADD_FORMAT_TARGETS(${STACK_SAMPLER_MODULES})
+
+# GPL v2 requires the license text to go with the binary.
+INSTALL(FILES README.md LICENSE DESTINATION share/doc/${PROJECT_NAME})
+
+INCLUDE(cmake/packaging.cmake)

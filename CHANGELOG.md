@@ -2,6 +2,12 @@
 
 Changes by minor version; each entry includes its patch releases.
 
+## 0.3 — 2026-11-09
+
+### Added
+
+- Debian/Ubuntu package.
+
 ## 0.2 — 2026-11-09
 
 ### Added

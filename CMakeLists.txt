@@ -24,7 +24,7 @@ TARGET_COMPILE_OPTIONS(ssr-warnings INTERFACE -Wall -Wextra -Wpedantic -Werror -
 # Modules in dependency order, the executable last; sampling is Linux-only.
 SET(STACK_SAMPLER_MODULES stack profile src)
 IF(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    SET(STACK_SAMPLER_MODULES process wait stack cpu profile src)
+    SET(STACK_SAMPLER_MODULES process wait stack cpu profile bpf src)
 ENDIF()
 FOREACH(MODULE IN LISTS STACK_SAMPLER_MODULES)
     ADD_SUBDIRECTORY(${MODULE})

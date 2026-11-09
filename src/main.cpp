@@ -129,7 +129,8 @@ int sample(const stack_sampler::Options &options) {
   std::fprintf(stderr,
                "passes=%llu late=%llu threads=%llu blocked=%llu running=%llu moved=%llu no_stack=%llu "
                "leaf_callers=%llu recopied=%llu gone=%llu profile_samples=%zu pass_ms_median=%.1f pass_ms_max=%.1f "
-               "cpus=%zu cpu_samples=%llu cpu_other=%llu cpu_no_stack=%llu cpu_lost=%llu own_cpu_s=%.2f\n",
+               "cpus=%zu cpu_samples=%llu cpu_other=%llu cpu_no_stack=%llu cpu_lost=%llu own_cpu_s=%.2f "
+               "source=%s searched=%llu\n",
                static_cast<unsigned long long>(statistics.passes), static_cast<unsigned long long>(statistics.latePasses),
                static_cast<unsigned long long>(statistics.threads), static_cast<unsigned long long>(statistics.blocked),
                static_cast<unsigned long long>(statistics.running), static_cast<unsigned long long>(statistics.moved),
@@ -140,7 +141,9 @@ int sample(const stack_sampler::Options &options) {
                static_cast<unsigned long long>(statistics.cpuSamples),
                static_cast<unsigned long long>(statistics.cpuOtherProcesses),
                static_cast<unsigned long long>(statistics.cpuNoStack),
-               static_cast<unsigned long long>(statistics.cpuLost), ownCpuSeconds());
+               static_cast<unsigned long long>(statistics.cpuLost), ownCpuSeconds(),
+               statistics.taskIterator ? "bpf" : "proc",
+               static_cast<unsigned long long>(statistics.searchedFromStackPointer));
   return exitWith(ExitCode::Success);
 }
 #endif

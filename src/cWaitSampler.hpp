@@ -26,6 +26,12 @@
 #include "cRemoteMemory.hpp"
 #include "cThreadReader.hpp"
 #include "cWaitClassifier.hpp"
+#ifdef STACK_SAMPLER_HAS_BPF
+#include <optional>
+#include <vector>
+
+#include "cTaskIterator.hpp"
+#endif
 #include "sSamplerStatistics.hpp"
 #include "sStackCopy.hpp"
 
@@ -50,6 +56,11 @@ class WaitSampler {
 
  private:
   void sampleThread(int tid, SamplerStatistics &statistics);
+#ifdef STACK_SAMPLER_HAS_BPF
+  void sampleRecord(const ssr_task_record &record, SamplerStatistics &statistics);
+#endif
+  void addBlocked(SampleLabels &labels, const SyscallState &state, std::vector<std::uint64_t> frames);
+  const Mapping *stackMappingOf(std::uint64_t stackPointer);
   StackTrace walkStack(const Mapping &stackMapping, const SyscallState &state, SamplerStatistics &statistics);
 
   const MemoryMap &map_;
@@ -64,6 +75,10 @@ class WaitSampler {
   FramePointerWalker walker_;
   StackCopy stack_;
   std::int64_t wall_;
+#ifdef STACK_SAMPLER_HAS_BPF
+  std::optional<TaskIterator> tasks_;
+  std::vector<ssr_task_record> records_;
+#endif
 };
 
 }  // namespace stack_sampler

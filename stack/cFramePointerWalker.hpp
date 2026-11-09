@@ -34,6 +34,9 @@ class FramePointerWalker {
 
   StackTrace walk(const StackCopy &stack, std::uint64_t stackPointer, std::uint64_t programCounter) const;
 
+  // The bytes before the return address end with an x86-64 call instruction.
+  bool followsCall(std::uint64_t returnAddress) const;
+
  private:
   enum class ChainEnd { Zero, OutOfCopy, Broken };
 
@@ -44,7 +47,6 @@ class FramePointerWalker {
 
   Chain follow(const StackCopy &stack, std::uint64_t frame) const;
   static bool accepted(const Chain &chain);
-  bool followsCall(std::uint64_t returnAddress) const;
 
   const CodeSource &code_;
 };

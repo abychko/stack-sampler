@@ -32,6 +32,8 @@ struct SamplerStatistics {
   std::uint64_t noStack = 0;  // no frame-pointer chain found
   std::uint64_t leafCallers = 0;
   std::uint64_t stackRecopied = 0;  // the chain ran past the first, short stack copy
+  std::uint64_t searchedFromStackPointer = 0;  // the iterator chain was broken, the search found more
+  bool taskIterator = false;                   // the BPF task iterator, not /proc
   std::uint64_t gone = 0;  // the thread exited or could not be read
   std::vector<double> passMilliseconds;
 

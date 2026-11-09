@@ -19,6 +19,7 @@
 #include <cinttypes>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 namespace stack_sampler {
 
@@ -46,11 +47,30 @@ WaitSampler::WaitSampler(int pid, const MemoryMap &map, ProfileBuilder &profile,
       classifier_(memory_, descriptors_),
       code_(map_, memory_),
       walker_(code_),
-      wall_(wallPerSample) {}
+      wall_(wallPerSample) {
+#ifdef STACK_SAMPLER_HAS_BPF
+  tasks_.emplace();
+  if (const std::string error = tasks_->open(pid); !error.empty()) {
+    std::fprintf(stderr, "stack-sampler: %s; reading /proc instead\n", error.c_str());
+    tasks_.reset();
+  }
+#endif
+}
 
 std::int64_t WaitSampler::wallPerSample(double frequency) { return std::llround(1e9 / frequency); }
 
 bool WaitSampler::pass(SamplerStatistics &statistics) {
+#ifdef STACK_SAMPLER_HAS_BPF
+  if (tasks_) {
+    statistics.taskIterator = true;
+    if (!tasks_->pass(records_) || records_.empty()) return false;
+    ++statistics.passes;
+    descriptors_.newPass();
+    mapReloaded_ = false;
+    for (const ssr_task_record &record : records_) sampleRecord(record, statistics);
+    return true;
+  }
+#endif
   const std::vector<int> tids = threads_.threads();
   if (tids.empty()) return false;
   ++statistics.passes;
@@ -99,13 +119,7 @@ void WaitSampler::sampleThread(int tid, SamplerStatistics &statistics) {
     return;
   }
 
-  const Mapping *stackMapping = map_.find(before.stackPointer);
-  if (stackMapping == nullptr && !mapReloaded_ && reloadMap_) {
-    // A thread started after the map was read: its stack is not in it yet.
-    mapReloaded_ = true;
-    reloadMap_();
-    stackMapping = map_.find(before.stackPointer);
-  }
+  const Mapping *stackMapping = stackMappingOf(before.stackPointer);
   StackTrace trace;
   if (stackMapping != nullptr) trace = walkStack(*stackMapping, before, statistics);
   if (!threads_.syscallUnchanged(tid, before.raw)) {
@@ -116,13 +130,82 @@ void WaitSampler::sampleThread(int tid, SamplerStatistics &statistics) {
   if (!trace.chainFound) ++statistics.noStack;
   if (trace.leafCallerAdded) ++statistics.leafCallers;
   if (trace.frames.empty()) trace.frames.push_back(before.programCounter);
+  addBlocked(labels, before, std::move(trace.frames));
+}
 
-  const WaitDescription wait = classifier_.classify(before);
+const Mapping *WaitSampler::stackMappingOf(std::uint64_t stackPointer) {
+  const Mapping *mapping = map_.find(stackPointer);
+  if (mapping == nullptr && !mapReloaded_ && reloadMap_) {
+    // A thread started after the map was read: its stack is not in it yet.
+    mapReloaded_ = true;
+    reloadMap_();
+    mapping = map_.find(stackPointer);
+  }
+  return mapping;
+}
+
+void WaitSampler::addBlocked(SampleLabels &labels, const SyscallState &state, std::vector<std::uint64_t> frames) {
+  const std::int64_t values[] = {1, wall_, 0};  // samples, wall, cpu
+  const WaitDescription wait = classifier_.classify(state);
   labels.strings.push_back({"wait", wait.waitClass});
   labels.strings.push_back({"syscall", wait.syscall});
   if (wait.futex) labels.strings.push_back({"futex", hex(*wait.futex)});
   if (wait.fdKind) labels.strings.push_back({"fd", *wait.fdKind});
-  profile_.addSample(trace.frames, labels, values);
+  profile_.addSample(frames, labels, values);
 }
+
+#ifdef STACK_SAMPLER_HAS_BPF
+// A thread from the task iterator: registers and the chain from RBP come from
+// the kernel; the caller of a frameless leaf is taken from [sp], and a chain
+// broken by code without frame pointers is searched from SP as on /proc.
+void WaitSampler::sampleRecord(const ssr_task_record &record, SamplerStatistics &statistics) {
+  ++statistics.threads;
+  const char state = record.state == 0 ? 'R' : record.state & 2 ? 'D' : record.state & 1 ? 'S' : '?';
+  SampleLabels labels;
+  labels.strings = {{"profile", "wait"}, {"thread", std::string(record.name, strnlen(record.name, sizeof record.name))},
+                    {"state", std::string(1, state)}};
+  labels.numbers = {{"tid", static_cast<std::int64_t>(record.tid)}};
+  if (record.state == 0) {
+    ++statistics.running;
+    labels.strings.push_back({"wait", "running"});
+    const std::int64_t values[] = {1, wall_, 0};
+    profile_.addSample({}, labels, values);
+    return;
+  }
+
+  SyscallState syscall;
+  syscall.status = record.syscall >= 0 ? SyscallStatus::InSyscall : SyscallStatus::NotInSyscall;
+  syscall.number = record.syscall;
+  syscall.arguments[0] = record.arg0;
+  syscall.arguments[1] = record.arg1;
+  syscall.stackPointer = record.sp;
+  syscall.programCounter = record.ip;
+
+  std::vector<std::uint64_t> frames{record.ip};
+  const std::uint32_t count = std::min<std::uint32_t>(record.frames, SSR_TASK_FRAMES);
+  if (!record.complete) {
+    // Code without frame pointers broke the chain: search from SP instead.
+    if (const Mapping *stackMapping = stackMappingOf(record.sp)) {
+      StackTrace trace = walkStack(*stackMapping, syscall, statistics);
+      if (trace.chainFound && trace.frames.size() > count + 1) {
+        ++statistics.searchedFromStackPointer;
+        if (trace.leafCallerAdded) ++statistics.leafCallers;
+        ++statistics.blocked;
+        addBlocked(labels, syscall, std::move(trace.frames));
+        return;
+      }
+    }
+    if (count == 0) ++statistics.noStack;
+  }
+  if (code_.isCode(record.at_sp) && walker_.followsCall(record.at_sp) &&
+      (count == 0 || record.at_sp != record.ra[0])) {
+    frames.push_back(record.at_sp - 1);
+    ++statistics.leafCallers;
+  }
+  for (std::uint32_t i = 0; i < count && code_.isCode(record.ra[i]); ++i) frames.push_back(record.ra[i] - 1);
+  ++statistics.blocked;
+  addBlocked(labels, syscall, std::move(frames));
+}
+#endif
 
 }  // namespace stack_sampler

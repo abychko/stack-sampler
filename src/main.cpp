@@ -80,6 +80,12 @@ int sample(const stack_sampler::Options &options) {
                  options.pid);
     return exitWith(ExitCode::TargetError);
   }
+  // The wait profile keeps two /proc files open per thread of the target.
+  rlimit files{};
+  if (getrlimit(RLIMIT_NOFILE, &files) == 0 && files.rlim_cur < files.rlim_max) {
+    files.rlim_cur = files.rlim_max;
+    setrlimit(RLIMIT_NOFILE, &files);
+  }
   std::signal(SIGINT, requestStop);
   std::signal(SIGTERM, requestStop);
 
@@ -122,13 +128,14 @@ int sample(const stack_sampler::Options &options) {
   const double longest = times.empty() ? 0 : times.back();
   std::fprintf(stderr,
                "passes=%llu late=%llu threads=%llu blocked=%llu running=%llu moved=%llu no_stack=%llu "
-               "leaf_callers=%llu gone=%llu profile_samples=%zu pass_ms_median=%.1f pass_ms_max=%.1f "
+               "leaf_callers=%llu recopied=%llu gone=%llu profile_samples=%zu pass_ms_median=%.1f pass_ms_max=%.1f "
                "cpus=%zu cpu_samples=%llu cpu_other=%llu cpu_no_stack=%llu cpu_lost=%llu own_cpu_s=%.2f\n",
                static_cast<unsigned long long>(statistics.passes), static_cast<unsigned long long>(statistics.latePasses),
                static_cast<unsigned long long>(statistics.threads), static_cast<unsigned long long>(statistics.blocked),
                static_cast<unsigned long long>(statistics.running), static_cast<unsigned long long>(statistics.moved),
                static_cast<unsigned long long>(statistics.noStack),
-               static_cast<unsigned long long>(statistics.leafCallers), static_cast<unsigned long long>(statistics.gone),
+               static_cast<unsigned long long>(statistics.leafCallers),
+               static_cast<unsigned long long>(statistics.stackRecopied), static_cast<unsigned long long>(statistics.gone),
                profileSamples, median, longest, statistics.cpus,
                static_cast<unsigned long long>(statistics.cpuSamples),
                static_cast<unsigned long long>(statistics.cpuOtherProcesses),

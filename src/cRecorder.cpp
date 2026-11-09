@@ -25,7 +25,9 @@ namespace {
 
 using Clock = std::chrono::steady_clock;
 
-constexpr auto kMapRefresh = std::chrono::seconds(1);
+// Reading the map takes the memory-map lock of the target: it is reread seldom,
+// and at once when a wait pass meets a stack it lacks.
+constexpr auto kMapRefresh = std::chrono::seconds(10);
 constexpr auto kLongestSleep = std::chrono::milliseconds(100);
 
 Clock::duration seconds(double value) {
@@ -37,7 +39,8 @@ Clock::duration seconds(double value) {
 Recorder::Recorder(const Options &options, ProfileBuilder &profile)
     : options_(options), profile_(profile), map_(options.pid), buildIds_(options.pid) {
   if (options.waitProfile)
-    wait_.emplace(options.pid, map_, profile_, WaitSampler::wallPerSample(options.frequency));
+    wait_.emplace(options.pid, map_, profile_, WaitSampler::wallPerSample(options.frequency),
+                  [this] { return loadMap(); });
   if (options.cpuProfile) cpu_.emplace(options.pid, profile_, options.cpuFrequency);
 }
 
@@ -56,9 +59,7 @@ SamplerStatistics Recorder::run(const std::atomic<bool> &stopRequested) {
   while (!stopRequested.load() && !gone && Clock::now() < deadline) {
     if (wait_ && Clock::now() >= nextPass) {
       const auto started = Clock::now();
-      if (!loadMap()) break;  // the target exited
-      nextMap = started + kMapRefresh;
-      wait_->pass(statistics);
+      if (!wait_->pass(statistics)) break;  // the target exited
       statistics.passMilliseconds.push_back(std::chrono::duration<double, std::milli>(Clock::now() - started).count());
       nextPass += period;
       if (nextPass < Clock::now()) {

@@ -11,6 +11,7 @@ Changes by minor version; each entry includes its patch releases.
 ### Changed
 
 - Every profile has the sample types samples, wall and cpu and a `profile` label (wait or cpu).
+- A wait pass costs half as much CPU: /proc files of threads stay open, stacks are copied as far as the chain goes, the memory map is reread every 10 s.
 
 ## 0.3 — 2026-11-09
 

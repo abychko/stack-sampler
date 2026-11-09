@@ -35,8 +35,11 @@ class MemoryMap {
   const std::vector<Mapping> &mappings() const { return mappings_; }
 
  private:
+  static const Mapping *findIn(const std::vector<Mapping> &mappings, std::uint64_t address);
+
   int pid_;
   std::vector<Mapping> mappings_;  // sorted by start, as the kernel lists them
+  std::vector<Mapping> code_;      // the executable ones
 };
 
 }  // namespace stack_sampler

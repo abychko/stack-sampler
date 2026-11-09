@@ -24,7 +24,7 @@ namespace stack_sampler {
 
 namespace {
 
-// The copy stops at the end of the stack mapping anyway.
+constexpr std::uint64_t kFirstStackCopy = 4 * 1024;
 constexpr std::uint64_t kMaximumStackCopy = 512 * 1024;
 
 std::string hex(std::uint64_t value) {
@@ -35,9 +35,11 @@ std::string hex(std::uint64_t value) {
 
 }  // namespace
 
-WaitSampler::WaitSampler(int pid, const MemoryMap &map, ProfileBuilder &profile, std::int64_t wallPerSample)
+WaitSampler::WaitSampler(int pid, const MemoryMap &map, ProfileBuilder &profile, std::int64_t wallPerSample,
+                         std::function<bool()> reloadMap)
     : map_(map),
       profile_(profile),
+      reloadMap_(std::move(reloadMap)),
       threads_(pid),
       memory_(pid),
       descriptors_(pid),
@@ -48,9 +50,32 @@ WaitSampler::WaitSampler(int pid, const MemoryMap &map, ProfileBuilder &profile,
 
 std::int64_t WaitSampler::wallPerSample(double frequency) { return std::llround(1e9 / frequency); }
 
-void WaitSampler::pass(SamplerStatistics &statistics) {
+bool WaitSampler::pass(SamplerStatistics &statistics) {
+  const std::vector<int> tids = threads_.threads();
+  if (tids.empty()) return false;
   ++statistics.passes;
-  for (int tid : threads_.threads()) sampleThread(tid, statistics);
+  descriptors_.newPass();
+  mapReloaded_ = false;
+  for (int tid : tids) sampleThread(tid, statistics);
+  return true;
+}
+
+// Copies the stack from the stack pointer and walks it; a chain that runs past a
+// short copy is walked again on a copy up to the end of the stack mapping.
+StackTrace WaitSampler::walkStack(const Mapping &stackMapping, const SyscallState &state,
+                                  SamplerStatistics &statistics) {
+  stack_.base = state.stackPointer & ~std::uint64_t{7};
+  const std::uint64_t live = std::min(stackMapping.end - stack_.base, kMaximumStackCopy);
+  stack_.bytes.resize(std::min(live, kFirstStackCopy));
+  stack_.bytes.resize(memory_.read(stack_.base, stack_.bytes));
+  StackTrace trace = walker_.walk(stack_, state.stackPointer, state.programCounter);
+  if ((trace.truncated || !trace.chainFound) && stack_.bytes.size() < live) {
+    ++statistics.stackRecopied;
+    stack_.bytes.resize(live);
+    stack_.bytes.resize(memory_.read(stack_.base, stack_.bytes));
+    trace = walker_.walk(stack_, state.stackPointer, state.programCounter);
+  }
+  return trace;
 }
 
 void WaitSampler::sampleThread(int tid, SamplerStatistics &statistics) {
@@ -74,15 +99,16 @@ void WaitSampler::sampleThread(int tid, SamplerStatistics &statistics) {
     return;
   }
 
-  StackTrace trace;
-  if (const Mapping *stackMapping = map_.find(before.stackPointer)) {
-    stack_.base = before.stackPointer & ~std::uint64_t{7};
-    stack_.bytes.resize(std::min(stackMapping->end - stack_.base, kMaximumStackCopy));
-    stack_.bytes.resize(memory_.read(stack_.base, stack_.bytes));
-    trace = walker_.walk(stack_, before.stackPointer, before.programCounter);
+  const Mapping *stackMapping = map_.find(before.stackPointer);
+  if (stackMapping == nullptr && !mapReloaded_ && reloadMap_) {
+    // A thread started after the map was read: its stack is not in it yet.
+    mapReloaded_ = true;
+    reloadMap_();
+    stackMapping = map_.find(before.stackPointer);
   }
-  const SyscallState after = threads_.syscall(tid);
-  if (after.raw != before.raw) {
+  StackTrace trace;
+  if (stackMapping != nullptr) trace = walkStack(*stackMapping, before, statistics);
+  if (!threads_.syscallUnchanged(tid, before.raw)) {
     ++statistics.moved;
     return;
   }

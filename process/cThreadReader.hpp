@@ -15,7 +15,10 @@
 
 #pragma once
 
+#include <array>
 #include <optional>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "sSyscallState.hpp"
@@ -24,19 +27,33 @@
 namespace stack_sampler {
 
 // Reads the threads of the target and their state from /proc, without stopping
-// them.
+// them. The stat and syscall files of every thread stay open between passes and
+// are reread from offset 0: the kernel regenerates them on every read.
 class ThreadReader {
  public:
   explicit ThreadReader(int pid) : pid_(pid) {}
+  ThreadReader(const ThreadReader &) = delete;
+  ThreadReader &operator=(const ThreadReader &) = delete;
+  ~ThreadReader();
 
-  // Thread ids from /proc/<pid>/task; empty when the process is gone.
-  std::vector<int> threads() const;
+  // Thread ids from /proc/<pid>/task; empty when the process is gone. Files of
+  // threads that are gone are closed.
+  std::vector<int> threads();
 
-  std::optional<ThreadStatus> status(int tid) const;
-  SyscallState syscall(int tid) const;
+  std::optional<ThreadStatus> status(int tid);
+  SyscallState syscall(int tid);
+
+  // Rereads the syscall file: true when the text is still the given one.
+  bool syscallUnchanged(int tid, const std::string &raw);
 
  private:
+  enum File { kStat = 0, kSyscall = 1 };
+
+  std::string read(int tid, File file);
+
   int pid_;
+  std::unordered_map<int, std::array<int, 2>> files_;
+  bool keepOpen_ = true;  // false once the descriptor limit is reached
 };
 
 }  // namespace stack_sampler

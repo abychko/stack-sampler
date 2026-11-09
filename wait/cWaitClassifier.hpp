@@ -25,7 +25,7 @@ namespace stack_sampler {
 // Classifies the wait of a blocked thread by its system call and arguments.
 class WaitClassifier {
  public:
-  WaitClassifier(const RemoteMemory &memory, const FileDescriptorReader &descriptors)
+  WaitClassifier(const RemoteMemory &memory, FileDescriptorReader &descriptors)
       : memory_(memory), descriptors_(descriptors) {}
 
   WaitDescription classify(const SyscallState &state) const;
@@ -34,7 +34,7 @@ class WaitClassifier {
   long polledDescriptor(const SyscallState &state) const;
 
   const RemoteMemory &memory_;
-  const FileDescriptorReader &descriptors_;
+  FileDescriptorReader &descriptors_;
 };
 
 }  // namespace stack_sampler

@@ -19,27 +19,29 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <unordered_set>
 
 namespace stack_sampler {
 
 namespace {
 
-// Reads a small /proc file in one read() call, as the kernel produces it.
-std::string readSmall(const std::string &path) {
-  const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
-  if (fd < 0) return {};
-  char buffer[1024];
-  const ssize_t done = read(fd, buffer, sizeof buffer - 1);
-  close(fd);
-  return done > 0 ? std::string(buffer, static_cast<std::size_t>(done)) : std::string();
-}
+constexpr std::size_t kReadSize = 1024;
+
+const char *const kFileNames[] = {"stat", "syscall"};
 
 }  // namespace
 
-std::vector<int> ThreadReader::threads() const {
+ThreadReader::~ThreadReader() {
+  for (const auto &[tid, fds] : files_)
+    for (int fd : fds)
+      if (fd >= 0) close(fd);
+}
+
+std::vector<int> ThreadReader::threads() {
   std::vector<int> tids;
   const std::string path = "/proc/" + std::to_string(pid_) + "/task";
   DIR *directory = opendir(path.c_str());
@@ -49,11 +51,53 @@ std::vector<int> ThreadReader::threads() const {
     if (tid > 0) tids.push_back(tid);
   }
   closedir(directory);
+
+  const std::unordered_set<int> present(tids.begin(), tids.end());
+  for (auto it = files_.begin(); it != files_.end();) {
+    if (present.count(it->first) != 0) {
+      ++it;
+      continue;
+    }
+    for (int fd : it->second)
+      if (fd >= 0) close(fd);
+    it = files_.erase(it);
+  }
   return tids;
 }
 
-std::optional<ThreadStatus> ThreadReader::status(int tid) const {
-  const std::string text = readSmall("/proc/" + std::to_string(pid_) + "/task/" + std::to_string(tid) + "/stat");
+// The current text of a /proc file of the thread, read in one call from offset 0.
+std::string ThreadReader::read(int tid, File file) {
+  char buffer[kReadSize];
+  if (!keepOpen_) {
+    const std::string path = "/proc/" + std::to_string(pid_) + "/task/" + std::to_string(tid) + "/" + kFileNames[file];
+    const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return {};
+    const ssize_t done = pread(fd, buffer, sizeof buffer - 1, 0);
+    close(fd);
+    return done > 0 ? std::string(buffer, static_cast<std::size_t>(done)) : std::string();
+  }
+  auto &fds = files_.try_emplace(tid, std::array<int, 2>{-1, -1}).first->second;
+  if (fds[file] < 0) {
+    const std::string path = "/proc/" + std::to_string(pid_) + "/task/" + std::to_string(tid) + "/" + kFileNames[file];
+    fds[file] = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (fds[file] < 0) {
+      if (errno == EMFILE || errno == ENFILE) {
+        keepOpen_ = false;  // out of descriptors: read the rest by path
+        return read(tid, file);
+      }
+      return {};
+    }
+  }
+  const ssize_t done = pread(fds[file], buffer, sizeof buffer - 1, 0);
+  if (done > 0) return std::string(buffer, static_cast<std::size_t>(done));
+  // The thread is gone: its files no longer read.
+  for (int &fd : fds)
+    if (fd >= 0) close(fd), fd = -1;
+  return {};
+}
+
+std::optional<ThreadStatus> ThreadReader::status(int tid) {
+  const std::string text = read(tid, kStat);
   // "<tid> (<name>) <state> ...": the name may itself contain ')'.
   const std::size_t nameStart = text.find('(');
   const std::size_t nameEnd = text.rfind(')');
@@ -66,9 +110,9 @@ std::optional<ThreadStatus> ThreadReader::status(int tid) const {
   return status;
 }
 
-SyscallState ThreadReader::syscall(int tid) const {
+SyscallState ThreadReader::syscall(int tid) {
   SyscallState state;
-  state.raw = readSmall("/proc/" + std::to_string(pid_) + "/task/" + std::to_string(tid) + "/syscall");
+  state.raw = read(tid, kSyscall);
   if (state.raw.empty()) return state;
   if (state.raw.rfind("running", 0) == 0) {
     state.status = SyscallStatus::Running;
@@ -98,5 +142,7 @@ SyscallState ThreadReader::syscall(int tid) const {
   state.status = SyscallStatus::InSyscall;
   return state;
 }
+
+bool ThreadReader::syscallUnchanged(int tid, const std::string &raw) { return read(tid, kSyscall) == raw; }
 
 }  // namespace stack_sampler

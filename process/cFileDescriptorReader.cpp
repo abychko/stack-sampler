@@ -19,7 +19,23 @@
 
 namespace stack_sampler {
 
-std::string FileDescriptorReader::kind(long fd) const {
+namespace {
+
+constexpr unsigned kPassesPerRefresh = 10;
+
+}  // namespace
+
+const std::string &FileDescriptorReader::kind(long fd) {
+  const auto found = kinds_.find(fd);
+  if (found != kinds_.end()) return found->second;
+  return kinds_.emplace(fd, readKind(fd)).first->second;
+}
+
+void FileDescriptorReader::newPass() {
+  if (++passes_ % kPassesPerRefresh == 0) kinds_.clear();
+}
+
+std::string FileDescriptorReader::readKind(long fd) const {
   if (fd < 0) return "unknown";
   const std::string path = "/proc/" + std::to_string(pid_) + "/fd/" + std::to_string(fd);
   char target[256];

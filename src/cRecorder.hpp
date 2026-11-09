@@ -31,7 +31,8 @@ namespace stack_sampler {
 
 // Runs the chosen profiles together for the duration: wait passes at their
 // frequency, CPU rings drained in between, the memory map of the target reread
-// before every pass and at least once a second for the mappings of the profile.
+// every few seconds for the mappings of the profile and whenever a wait pass
+// meets a stack it lacks.
 class Recorder {
  public:
   Recorder(const Options &options, ProfileBuilder &profile);

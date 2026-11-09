@@ -32,6 +32,9 @@ struct StackTrace {
   // The return address at the stack pointer was added as the first caller:
   // the leaf function runs without a frame of its own.
   bool leafCallerAdded = false;
+
+  // The chain runs past the end of the stack copy: a longer copy gives more frames.
+  bool truncated = false;
 };
 
 }  // namespace stack_sampler

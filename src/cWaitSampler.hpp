@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 
 #include "cFileDescriptorReader.hpp"
 #include "cFramePointerWalker.hpp"
@@ -36,19 +37,25 @@ namespace stack_sampler {
 // profile.
 class WaitSampler {
  public:
-  // The memory map is loaded by the caller before every pass.
-  WaitSampler(int pid, const MemoryMap &map, ProfileBuilder &profile, std::int64_t wallPerSample);
+  // The memory map is loaded by the caller; reloadMap rereads it when the stack
+  // of a thread is not in it, at most once a pass.
+  WaitSampler(int pid, const MemoryMap &map, ProfileBuilder &profile, std::int64_t wallPerSample,
+              std::function<bool()> reloadMap);
 
-  void pass(SamplerStatistics &statistics);
+  // False when the target has no threads left: it is gone.
+  bool pass(SamplerStatistics &statistics);
 
   // Nanoseconds of wall time one sample stands for.
   static std::int64_t wallPerSample(double frequency);
 
  private:
   void sampleThread(int tid, SamplerStatistics &statistics);
+  StackTrace walkStack(const Mapping &stackMapping, const SyscallState &state, SamplerStatistics &statistics);
 
   const MemoryMap &map_;
   ProfileBuilder &profile_;
+  std::function<bool()> reloadMap_;
+  bool mapReloaded_ = false;
   ThreadReader threads_;
   RemoteMemory memory_;
   FileDescriptorReader descriptors_;

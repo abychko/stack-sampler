@@ -42,6 +42,7 @@ StackTrace FramePointerWalker::walk(const StackCopy &stack, std::uint64_t stackP
     if (!accepted(chain)) continue;
 
     trace.chainFound = true;
+    trace.truncated = chain.end == ChainEnd::OutOfCopy;
     std::uint64_t atStackPointer = 0;
     if (frame > stackPointer && stack.readWord(stackPointer, atStackPointer) && code_.isCode(atStackPointer) &&
         followsCall(atStackPointer)) {

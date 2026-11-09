@@ -12,6 +12,7 @@ SET(CMAKE_CXX_EXTENSIONS OFF)
 OPTION(DEVELOPER_MODE "Enable developer mode" OFF)
 INCLUDE("${PROJECT_SOURCE_DIR}/cmake/developer_mode.cmake")
 INCLUDE("${PROJECT_SOURCE_DIR}/cmake/sanitizers.cmake")
+INCLUDE("${PROJECT_SOURCE_DIR}/cmake/build_dependencies.cmake")
 
 # The repository root must not be an include directory: on a case-insensitive
 # file system the VERSION file shadows the standard <version> header.

@@ -52,7 +52,7 @@ void printUsage(std::FILE *stream) {
                "  --pid PID             process to sample\n"
                "  --output FILE         pprof profile to write\n"
                "  --profile KINDS       wait, cpu or wait,cpu; default wait\n"
-               "  --frequency HZ        wait passes over all threads per second, default 1\n"
+               "  --frequency HZ        wait passes over all threads per second, default 10\n"
                "  --cpu-frequency HZ    CPU samples per second on every CPU, default 99\n"
                "  --duration SECONDS    how long to sample, default 10; SIGINT stops earlier\n",
                STACK_SAMPLER_NAME, STACK_SAMPLER_NAME);

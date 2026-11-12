@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <random>
 #include <thread>
 
 namespace stack_sampler {
@@ -53,7 +54,15 @@ SamplerStatistics Recorder::run(const std::atomic<bool> &stopRequested) {
   SamplerStatistics statistics;
   const auto deadline = Clock::now() + seconds(options_.duration);
   const auto period = seconds(1.0 / options_.frequency);
-  auto nextPass = Clock::now();
+  // One pass in every period, at a random moment of it: passes at a fixed phase
+  // would keep step with whatever the target does at the same period.
+  std::mt19937_64 random{std::random_device{}()};
+  std::uniform_real_distribution<double> part(0.0, 1.0);
+  const auto momentIn = [&](Clock::time_point periodStart) {
+    return periodStart + std::chrono::duration_cast<Clock::duration>(period * part(random));
+  };
+  auto periodStart = Clock::now();
+  auto nextPass = momentIn(periodStart);
   auto nextMap = Clock::now() + kMapRefresh;
   bool gone = false;
   while (!stopRequested.load() && !gone && Clock::now() < deadline) {
@@ -61,11 +70,12 @@ SamplerStatistics Recorder::run(const std::atomic<bool> &stopRequested) {
       const auto started = Clock::now();
       if (!wait_->pass(statistics)) break;  // the target exited
       statistics.passMilliseconds.push_back(std::chrono::duration<double, std::milli>(Clock::now() - started).count());
-      nextPass += period;
-      if (nextPass < Clock::now()) {
+      periodStart += period;
+      if (periodStart + period < Clock::now()) {
         ++statistics.latePasses;
-        nextPass = Clock::now();
+        periodStart = Clock::now();
       }
+      nextPass = momentIn(periodStart);
     }
     if (Clock::now() >= nextMap) {
       gone = !loadMap();

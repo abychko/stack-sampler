@@ -24,7 +24,7 @@ namespace stack_sampler {
 // Counters of one sampling run, printed when it ends.
 struct SamplerStatistics {
   std::uint64_t passes = 0;
-  std::uint64_t latePasses = 0;  // a pass took longer than the period
+  std::uint64_t latePasses = 0;  // the sampler fell a whole period behind
   std::uint64_t threads = 0;     // thread observations over all passes
   std::uint64_t blocked = 0;     // blocked threads with a sample
   std::uint64_t running = 0;

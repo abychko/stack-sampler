@@ -18,6 +18,7 @@ Changes by minor version; each entry includes its patch releases.
 ### Fixed
 
 - Shares of running and waiting time of busy threads in the wait profile were wrong: passes kept a fixed phase and stayed in step with whatever the process does once a second. Each pass now runs at a random moment of its period.
+- A thread that was being woken was recorded as waiting, with state `?`; it now counts as running, as in /proc.
 
 ## 0.3 — 2026-11-09
 

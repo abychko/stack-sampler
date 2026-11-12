@@ -23,7 +23,7 @@
 
 struct ssr_task_record {
   unsigned int tid;
-  unsigned int state;    /* task->__state: 0 running, 1 interruptible, 2 uninterruptible */
+  unsigned int state;    /* task->__state */
   long long syscall;     /* orig_ax of the saved user registers; -1 outside a call */
   unsigned long long arg0, arg1;
   unsigned long long ip, sp, bp;

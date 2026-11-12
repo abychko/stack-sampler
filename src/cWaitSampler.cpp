@@ -28,6 +28,18 @@ namespace {
 constexpr std::uint64_t kFirstStackCopy = 4 * 1024;
 constexpr std::uint64_t kMaximumStackCopy = 512 * 1024;
 
+// The state letter of /proc/<tid>/stat for task->__state: a thread that is being
+// woken counts as running.
+char stateLetter(unsigned int state) {
+  constexpr unsigned int kReported = 0x7f, kIdle = 0x402, kLockWait = 0x1000;
+  constexpr char kLetters[] = "RSDTtXZP";
+  if ((state & kIdle) == kIdle) return 'I';
+  if (state & kLockWait) return 'D';
+  unsigned int index = 0;
+  for (unsigned int reported = state & kReported; reported != 0; reported >>= 1) ++index;
+  return kLetters[index];
+}
+
 std::string hex(std::uint64_t value) {
   char text[24];
   std::snprintf(text, sizeof text, "0x%" PRIx64, value);
@@ -160,12 +172,12 @@ void WaitSampler::addBlocked(SampleLabels &labels, const SyscallState &state, st
 // broken by code without frame pointers is searched from SP as on /proc.
 void WaitSampler::sampleRecord(const ssr_task_record &record, SamplerStatistics &statistics) {
   ++statistics.threads;
-  const char state = record.state == 0 ? 'R' : record.state & 2 ? 'D' : record.state & 1 ? 'S' : '?';
+  const char state = stateLetter(record.state);
   SampleLabels labels;
   labels.strings = {{"profile", "wait"}, {"thread", std::string(record.name, strnlen(record.name, sizeof record.name))},
                     {"state", std::string(1, state)}};
   labels.numbers = {{"tid", static_cast<std::int64_t>(record.tid)}};
-  if (record.state == 0) {
+  if (state == 'R') {
     ++statistics.running;
     labels.strings.push_back({"wait", "running"});
     const std::int64_t values[] = {1, wall_, 0};

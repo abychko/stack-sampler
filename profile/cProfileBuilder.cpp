@@ -25,7 +25,7 @@ namespace {
 
 // Field numbers of profile.proto (github.com/google/pprof, proto/profile.proto).
 namespace profile {
-constexpr int kSampleType = 1, kSample = 2, kMapping = 3, kLocation = 4, kStringTable = 6, kTimeNanos = 9,
+constexpr int kSampleType = 1, kSample = 2, kMapping = 3, kLocation = 4, kFunction = 5, kStringTable = 6, kTimeNanos = 9,
               kDurationNanos = 10, kPeriodType = 11, kPeriod = 12, kComment = 13, kDefaultSampleType = 14;
 }
 namespace value_type {
@@ -41,7 +41,13 @@ namespace mapping {
 constexpr int kId = 1, kMemoryStart = 2, kMemoryLimit = 3, kFileOffset = 4, kFilename = 5, kBuildId = 6;
 }
 namespace location {
-constexpr int kId = 1, kMappingId = 2, kAddress = 3;
+constexpr int kId = 1, kMappingId = 2, kAddress = 3, kLine = 4;
+}
+namespace line {
+constexpr int kFunctionId = 1;
+}
+namespace function {
+constexpr int kId = 1, kName = 2, kSystemName = 3;
 }
 
 }  // namespace
@@ -64,7 +70,16 @@ void ProfileBuilder::addSample(std::span<const std::uint64_t> addresses, const S
   std::vector<std::uint64_t> locations;
   locations.reserve(addresses.size());
   for (std::uint64_t address : addresses) locations.push_back(location(address));
+  addLocated(std::move(locations), labels, values);
+}
 
+void ProfileBuilder::addSample(std::string_view frame, const SampleLabels &labels,
+                               std::span<const std::int64_t> values) {
+  addLocated({namedLocation(frame)}, labels, values);
+}
+
+void ProfileBuilder::addLocated(std::vector<std::uint64_t> locations, const SampleLabels &labels,
+                                std::span<const std::int64_t> values) {
   const std::string key = keyOf(locations, labels);
   const auto found = sampleIndex_.find(key);
   if (found != sampleIndex_.end()) {
@@ -124,10 +139,23 @@ std::string ProfileBuilder::serialize() {
   for (std::size_t i = 0; i < locationAddresses_.size(); ++i) {
     ProtobufEncoder encoded;
     encoded.varint(location::kId, i + 1);
-    const std::uint64_t mappingId = mappingOf(locationAddresses_[i]);
-    if (mappingId != 0) encoded.varint(location::kMappingId, mappingId);
-    encoded.varint(location::kAddress, locationAddresses_[i]);
+    if (locationFunctions_[i] != 0) {
+      ProtobufEncoder named;
+      named.varint(line::kFunctionId, locationFunctions_[i]);
+      encoded.message(location::kLine, named);
+    } else {
+      const std::uint64_t mappingId = mappingOf(locationAddresses_[i]);
+      if (mappingId != 0) encoded.varint(location::kMappingId, mappingId);
+      encoded.varint(location::kAddress, locationAddresses_[i]);
+    }
     out.message(profile::kLocation, encoded);
+  }
+  for (std::size_t i = 0; i < functions_.size(); ++i) {
+    ProtobufEncoder encoded;
+    encoded.varint(function::kId, i + 1);
+    encoded.signedVarint(function::kName, text(functions_[i]));
+    encoded.signedVarint(function::kSystemName, text(functions_[i]));
+    out.message(profile::kFunction, encoded);
   }
   out.signedVarint(profile::kTimeNanos, startNanoseconds_);
   out.signedVarint(profile::kDurationNanos, durationNanoseconds_);
@@ -159,8 +187,21 @@ std::uint64_t ProfileBuilder::location(std::uint64_t address) {
   const auto found = locationIds_.find(address);
   if (found != locationIds_.end()) return found->second;
   locationAddresses_.push_back(address);
+  locationFunctions_.push_back(0);
   const std::uint64_t id = locationAddresses_.size();
   locationIds_.emplace(address, id);
+  return id;
+}
+
+std::uint64_t ProfileBuilder::namedLocation(std::string_view name) {
+  const std::string key(name);
+  const auto found = namedLocationIds_.find(key);
+  if (found != namedLocationIds_.end()) return found->second;
+  functions_.push_back(key);
+  locationAddresses_.push_back(0);
+  locationFunctions_.push_back(functions_.size());
+  const std::uint64_t id = locationAddresses_.size();
+  namedLocationIds_.emplace(key, id);
   return id;
 }
 

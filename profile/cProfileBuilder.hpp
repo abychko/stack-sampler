@@ -30,7 +30,8 @@ namespace stack_sampler {
 
 // Collects samples with raw addresses and labels and serializes them as a pprof
 // profile (profile.proto). Equal samples (same addresses and labels) are merged
-// by adding their values.
+// by adding their values. A sample without a stack gets one named frame: pprof
+// leaves samples that have no frames out of its reports.
 class ProfileBuilder {
  public:
   using ValueType = std::pair<std::string, std::string>;  // type, unit
@@ -40,6 +41,7 @@ class ProfileBuilder {
   void addMapping(const ProfileMapping &mapping);
   void addSample(std::span<const std::uint64_t> addresses, const SampleLabels &labels,
                  std::span<const std::int64_t> values);
+  void addSample(std::string_view frame, const SampleLabels &labels, std::span<const std::int64_t> values);
   void setTime(std::int64_t startNanoseconds, std::int64_t durationNanoseconds);
   void addComment(std::string comment);
   void setDefaultSampleType(std::string type) { defaultSampleType_ = std::move(type); }
@@ -56,6 +58,9 @@ class ProfileBuilder {
 
   std::int64_t text(std::string_view value);
   std::uint64_t location(std::uint64_t address);
+  std::uint64_t namedLocation(std::string_view name);
+  void addLocated(std::vector<std::uint64_t> locations, const SampleLabels &labels,
+                  std::span<const std::int64_t> values);
   std::uint64_t mappingOf(std::uint64_t address) const;
   static std::string keyOf(std::span<const std::uint64_t> locations, const SampleLabels &labels);
 
@@ -69,7 +74,10 @@ class ProfileBuilder {
 
   std::vector<ProfileMapping> mappings_;
   std::vector<std::uint64_t> locationAddresses_;  // location id - 1 -> address
+  std::vector<std::uint64_t> locationFunctions_;  // location id - 1 -> function id, 0 for an address
   std::unordered_map<std::uint64_t, std::uint64_t> locationIds_;
+  std::vector<std::string> functions_;  // function id - 1 -> name
+  std::unordered_map<std::string, std::uint64_t> namedLocationIds_;
   std::vector<Sample> samples_;
   std::unordered_map<std::string, std::size_t> sampleIndex_;
   std::vector<std::string> strings_;

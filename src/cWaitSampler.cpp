@@ -20,6 +20,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <string_view>
 
 namespace stack_sampler {
 
@@ -27,6 +28,9 @@ namespace {
 
 constexpr std::uint64_t kFirstStackCopy = 4 * 1024;
 constexpr std::uint64_t kMaximumStackCopy = 512 * 1024;
+
+// The frame of a thread that is not blocked: it has no stack in this profile.
+constexpr std::string_view kRunningFrame = "[running]";
 
 // The state letter of /proc/<tid>/stat for task->__state: a thread that is being
 // woken counts as running.
@@ -127,7 +131,7 @@ void WaitSampler::sampleThread(int tid, SamplerStatistics &statistics) {
   if (before.status == SyscallStatus::Running) {
     ++statistics.running;
     labels.strings.push_back({"wait", "running"});
-    profile_.addSample({}, labels, values);
+    profile_.addSample(kRunningFrame, labels, values);
     return;
   }
 
@@ -181,7 +185,7 @@ void WaitSampler::sampleRecord(const ssr_task_record &record, SamplerStatistics 
     ++statistics.running;
     labels.strings.push_back({"wait", "running"});
     const std::int64_t values[] = {1, wall_, 0};
-    profile_.addSample({}, labels, values);
+    profile_.addSample(kRunningFrame, labels, values);
     return;
   }
 

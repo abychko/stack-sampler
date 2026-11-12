@@ -53,7 +53,8 @@ pprof -http=: -tagfocus=wait=futex -tagroot=wait mysqld.pb.gz
 
 Wait samples are labelled with thread, tid, state, wait class, syscall,
 futex address and descriptor kind; CPU samples with thread, tid and mode
-(user or kernel). To read the profile on another host, put mysqld of the same
+(user or kernel). A thread that is not blocked has the one frame `[running]`:
+it is on a CPU or waits for one, and what it runs is in the CPU profile. To read the profile on another host, put mysqld of the same
 build, with debug info, into `$PPROF_BINARY_PATH/<build id>/`; pprof prints
 the build id in the header of its report.
 
